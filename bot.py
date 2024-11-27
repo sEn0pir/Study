@@ -1,42 +1,92 @@
-import telebot
-from config import TOKEN
-from extensions import APIException, CurrencyConverter
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ConversationHandler
 
-bot = telebot.TeleBot(TOKEN)
 
-@bot.message_handler(commands=['start', 'help'])
-def send_welcome(message: telebot.types.Message):
-    text = (
-        "Привет! Я бот для конвертации валют.\n"
-        "Чтобы узнать цену валюты, отправьте сообщение в формате:\n"
-        "<имя валюты> <в какую валюту перевести> <количество>\n"
-        "Доступные команды:\n"
-        "/values — список доступных валют"
+QUESTION_1, QUESTION_2, QUESTION_3, RESULTS = range(4)
+
+
+results = {
+    "Раннее утро": "Орёл",
+    "Позднее утро": "Медведь",
+    "Вечер": "Сова",
+    "Активный день": "Лев",
+    "Спокойный день": "Панда",
+    "Общительный день": "Дельфин"
+}
+
+async def start(update: Update, context):
+    await update.message.reply_text(
+        'Привет! Хотите узнать, какое тотемное животное у вас? Пройдите нашу викторину и получите результат! Нажмите "Начать".',
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("Начать", callback_data='start')
+        ]])
     )
-    bot.reply_to(message, text)
 
-@bot.message_handler(commands=['values'])
-def send_values(message: telebot.types.Message):
-    text = CurrencyConverter.get_available_currencies()
-    bot.reply_to(message, text)
+async def question_1(update: Update, context):
+    query = update.callback_query
+    await query.answer()
+    await query.edit_message_text('Какое утро вам ближе?', reply_markup=InlineKeyboardMarkup([
+        [InlineKeyboardButton("Раннее утро", callback_data='Раннее утро')],
+        [InlineKeyboardButton("Позднее утро", callback_data='Позднее утро')],
+        [InlineKeyboardButton("Вечер", callback_data='Вечер')]
+    ]))
+    return QUESTION_2
 
-@bot.message_handler(content_types=['text'])
-def convert_currency(message: telebot.types.Message):
-    try:
-        values = message.text.split()
-        
-        if len(values) != 3:
-            raise APIException("Неверный формат. Должно быть 3 параметра.")
-        
-        base, quote, amount = values
-        total = CurrencyConverter.get_price(base, quote, amount)
-        
-        text = f"Цена {amount} {base} в {quote} — {total}"
-        bot.send_message(message.chat.id, text)
-    
-    except APIException as e:
-        bot.send_message(message.chat.id, f"Ошибка: {e}")
-    except Exception as e:
-        bot.send_message(message.chat.id, f"Неожиданная ошибка: {e}")
+async def question_2(update: Update, context):
+    query = update.callback_query
+    context.user_data['answer_1'] = query.data
+    await query.answer()
+    await query.edit_message_text('Какой день вам нравится больше?', reply_markup=InlineKeyboardMarkup([
+        [InlineKeyboardButton("Активный день", callback_data='Активный день')],
+        [InlineKeyboardButton("Спокойный день", callback_data='Спокойный день')],
+        [InlineKeyboardButton("Общительный день", callback_data='Общительный день')]
+    ]))
+    return QUESTION_3
 
-bot.polling()
+async def question_3(update: Update, context):
+    query = update.callback_query
+    context.user_data['answer_2'] = query.data
+    await query.answer()
+    await query.edit_message_text('Вы любите больше природу или город?', reply_markup=InlineKeyboardMarkup([
+        [InlineKeyboardButton("Природа", callback_data='Природа')],
+        [InlineKeyboardButton("Город", callback_data='Город')]
+    ]))
+    return RESULTS
+
+async def results_handler(update: Update, context):
+    query = update.callback_query
+    context.user_data['answer_3'] = query.data
+    await query.answer()
+
+    answer_1 = context.user_data.get('answer_1')
+    animal = results.get(answer_1, "Неизвестное животное")
+    await query.edit_message_text(f"Ваше тотемное животное — {animal}!")
+    return ConversationHandler.END
+
+async def cancel(update: Update, context):
+    await update.message.reply_text('Викторина прервана. Напишите /start, чтобы начать заново.')
+    return ConversationHandler.END
+
+def main():
+    TOKEN = "8141785519:AAE_8oI9bxOC8tbh8OuMWx-gL5naGuAH2f0"
+    application = Application.builder().token(TOKEN).build()
+
+
+    conv_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(question_1, pattern='^start$')],
+        states={
+            QUESTION_2: [CallbackQueryHandler(question_2)],
+            QUESTION_3: [CallbackQueryHandler(question_3)],
+            RESULTS: [CallbackQueryHandler(results_handler)],
+        },
+        fallbacks=[CommandHandler('cancel', cancel)],
+    )
+
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(conv_handler)
+
+    # Запуск бота
+    application.run_polling()
+
+if __name__ == "__main__":
+    main()
