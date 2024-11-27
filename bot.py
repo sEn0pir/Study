@@ -1,5 +1,6 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ConversationHandler
+import logging
 
 
 QUESTION_1, QUESTION_2, QUESTION_3, RESULTS = range(4)
@@ -14,13 +15,18 @@ results = {
     "Общительный день": "Дельфин"
 }
 
+
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
 async def start(update: Update, context):
     await update.message.reply_text(
         'Привет! Хотите узнать, какое тотемное животное у вас? Пройдите нашу викторину и получите результат! Нажмите "Начать".',
-        reply_markup=InlineKeyboardMarkup([[
-            InlineKeyboardButton("Начать", callback_data='start')
-        ]])
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Начать", callback_data='start')]])
     )
+
 
 async def question_1(update: Update, context):
     query = update.callback_query
@@ -31,6 +37,7 @@ async def question_1(update: Update, context):
         [InlineKeyboardButton("Вечер", callback_data='Вечер')]
     ]))
     return QUESTION_2
+
 
 async def question_2(update: Update, context):
     query = update.callback_query
@@ -43,6 +50,7 @@ async def question_2(update: Update, context):
     ]))
     return QUESTION_3
 
+
 async def question_3(update: Update, context):
     query = update.callback_query
     context.user_data['answer_2'] = query.data
@@ -52,6 +60,7 @@ async def question_3(update: Update, context):
         [InlineKeyboardButton("Город", callback_data='Город')]
     ]))
     return RESULTS
+
 
 async def results_handler(update: Update, context):
     query = update.callback_query
@@ -63,9 +72,24 @@ async def results_handler(update: Update, context):
     await query.edit_message_text(f"Ваше тотемное животное — {animal}!")
     return ConversationHandler.END
 
+
 async def cancel(update: Update, context):
     await update.message.reply_text('Викторина прервана. Напишите /start, чтобы начать заново.')
     return ConversationHandler.END
+
+
+async def contact(update: Update, context):
+    await update.message.reply_text('Пожалуйста, отправьте ваше сообщение. Мы свяжемся с вами в ближайшее время.')
+
+
+async def social(update: Update, context):
+    await update.message.reply_text(
+        'Поделитесь результатами в социальных сетях! \n' 
+        'Facebook: https://www.facebook.com/MoscowZoo/?locale=ru_RU\n'
+        'Instagram: https://www.instagram.com/moscow_zoo_official/\n'
+        'Twitter: https://x.com/i/flow/login?redirect_after_login=%2Fmoscowzoo'
+    )
+
 
 def main():
     TOKEN = "8141785519:AAE_8oI9bxOC8tbh8OuMWx-gL5naGuAH2f0"
@@ -84,8 +108,10 @@ def main():
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(conv_handler)
+    application.add_handler(CommandHandler("contact", contact))  # Обработчик для обратной связи
+    application.add_handler(CommandHandler("social", social))  # Обработчик для социальных сетей
 
-    # Запуск бота
+
     application.run_polling()
 
 if __name__ == "__main__":
